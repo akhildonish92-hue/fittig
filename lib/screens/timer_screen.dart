@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
+import '../services/ad_service.dart';
 import '../layouts/main_layout.dart';
 
 class TimerScreen extends StatefulWidget {
@@ -10,7 +11,7 @@ class TimerScreen extends StatefulWidget {
   State<TimerScreen> createState() => _TimerScreenState();
 }
 
-class _TimerScreenState extends State<TimerScreen> {
+class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
   String _trainingType = 'Workout';
   double _caloriesPerMinute = 5.0;
 
@@ -19,6 +20,18 @@ class _TimerScreenState extends State<TimerScreen> {
   int _totalSeconds = 300; // default 5 mins
   int _remainingSeconds = 300;
   Timer? _timer;
+  DateTime? _targetEndTime;
+
+  bool _isResting = false;
+  int _restRemainingSeconds = 0;
+  Timer? _restTimer;
+  DateTime? _restTargetEndTime;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
 
   @override
   void didChangeDependencies() {
@@ -38,41 +51,128 @@ class _TimerScreenState extends State<TimerScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
+    _restTimer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (_isRunning && _targetEndTime != null) {
+        final remaining = _targetEndTime!.difference(DateTime.now()).inSeconds;
+        setState(() {
+          _remainingSeconds = remaining > 0 ? remaining : 0;
+        });
+        if (_remainingSeconds <= 0) {
+          _timer?.cancel();
+          setState(() => _isRunning = false);
+          _handleWorkoutComplete();
+        }
+      }
+      
+      if (_isResting && _restTargetEndTime != null) {
+        final remaining = _restTargetEndTime!.difference(DateTime.now()).inSeconds;
+        setState(() {
+          _restRemainingSeconds = remaining > 0 ? remaining : 0;
+        });
+        if (_restRemainingSeconds <= 0) {
+          _restTimer?.cancel();
+          setState(() => _isResting = false);
+        }
+      }
+    }
   }
 
   void _startTimer() {
     if (_remainingSeconds <= 0) return;
 
+    if (_isResting) _stopRest();
+
     setState(() {
       _isRunning = true;
       _isSetupMode = false;
+      _targetEndTime = DateTime.now().add(Duration(seconds: _remainingSeconds));
     });
 
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_remainingSeconds > 0) {
-        setState(() {
-          _remainingSeconds--;
-        });
-      } else {
-        _timer?.cancel();
-        setState(() => _isRunning = false);
-        _handleWorkoutComplete();
+      if (_targetEndTime != null) {
+        final remaining = _targetEndTime!.difference(DateTime.now()).inSeconds;
+        if (remaining > 0) {
+          setState(() {
+            _remainingSeconds = remaining;
+          });
+        } else {
+          _timer?.cancel();
+          setState(() {
+            _remainingSeconds = 0;
+            _isRunning = false;
+          });
+          _handleWorkoutComplete();
+        }
       }
     });
   }
 
   void _pauseTimer() {
     _timer?.cancel();
-    setState(() => _isRunning = false);
+    setState(() {
+      _isRunning = false;
+      _targetEndTime = null;
+    });
   }
 
   void _resetTimer() {
     _timer?.cancel();
+    _restTimer?.cancel();
     setState(() {
       _isRunning = false;
+      _isResting = false;
       _remainingSeconds = _totalSeconds;
+      _targetEndTime = null;
+      _restTargetEndTime = null;
+    });
+  }
+
+  void _startRest() {
+    if (_isSetupMode || _remainingSeconds <= 0 || _isResting) return;
+    
+    _pauseTimer();
+    
+    setState(() {
+      _isResting = true;
+      _restRemainingSeconds = 60;
+      _restTargetEndTime = DateTime.now().add(const Duration(seconds: 60));
+    });
+
+    AdService.showInterstitialAd();
+    
+    _restTimer?.cancel();
+    _restTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_restTargetEndTime != null) {
+        final remaining = _restTargetEndTime!.difference(DateTime.now()).inSeconds;
+        if (remaining > 0) {
+          setState(() {
+            _restRemainingSeconds = remaining;
+          });
+        } else {
+          _restTimer?.cancel();
+          setState(() {
+            _isResting = false;
+            _restRemainingSeconds = 0;
+          });
+        }
+      }
+    });
+  }
+
+  void _stopRest() {
+    _restTimer?.cancel();
+    setState(() {
+      _isResting = false;
+      _restRemainingSeconds = 0;
+      _restTargetEndTime = null;
     });
   }
 
@@ -134,6 +234,13 @@ class _TimerScreenState extends State<TimerScreen> {
       streaks.add(dateStr);
       await prefs.setStringList('workoutStreaks', streaks);
     }
+    
+    final String currentMonth = dateStr.substring(0, 7);
+    final String calKey = 'calories_$currentMonth';
+    double totalCaThisMonth = prefs.getDouble(calKey) ?? 0.0;
+    await prefs.setDouble(calKey, totalCaThisMonth + _estimatedCaloriesBurned);
+
+    AdService.showInterstitialAd();
 
     if (!mounted) return;
 
@@ -214,12 +321,7 @@ class _TimerScreenState extends State<TimerScreen> {
               ),
             ],
           ),
-          actions: const [
-            Padding(
-              padding: EdgeInsets.only(right: 24.0),
-              child: Icon(Icons.settings, color: Colors.white70),
-            ),
-          ],
+          actions: const [], // Removed settings icon
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
@@ -283,7 +385,35 @@ class _TimerScreenState extends State<TimerScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 48),
+              const SizedBox(height: 32),
+              
+              if (_isResting) ...[
+                Column(
+                  children: [
+                    const Text(
+                      'RESTING',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.blueAccent,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 2.0,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${(_restRemainingSeconds / 60).floor().toString().padLeft(2, '0')}:${(_restRemainingSeconds % 60).toString().padLeft(2, '0')}',
+                      style: const TextStyle(
+                        fontSize: 32,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 32),
+              ] else ...[
+                const SizedBox(height: 48),
+              ],
 
               // Estimated Burn
               const Text(
@@ -409,20 +539,50 @@ class _TimerScreenState extends State<TimerScreen> {
                       ),
                     ),
                   ),
+                  const SizedBox(width: 8),
+
+                  // Rest Button
+                  Expanded(
+                    child: InkWell(
+                      onTap: _startRest,
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 20),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF141414),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          children: [
+                            const Icon(Icons.bedtime, color: Colors.blueAccent, size: 28),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'REST',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.white54,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                   const SizedBox(width: 16),
 
                   // Play/Pause Button
                   Container(
-                    width: 90,
-                    height: 90,
+                    width: 70, // Made slightly smaller to fit 4 buttons nicely
+                    height: 70,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: primaryColor,
                       boxShadow: [
                         BoxShadow(
                           color: primaryColor.withValues(alpha: 0.2),
-                          spreadRadius: 10,
-                          blurRadius: 20,
+                          spreadRadius: 8,
+                          blurRadius: 15,
                         ),
                       ],
                     ),
@@ -434,7 +594,7 @@ class _TimerScreenState extends State<TimerScreen> {
                         child: Icon(
                           _isRunning ? Icons.pause : Icons.play_arrow,
                           color: Colors.black,
-                          size: 40,
+                          size: 32,
                         ),
                       ),
                     ),

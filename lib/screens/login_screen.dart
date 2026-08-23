@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../widgets/animated_popup.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -38,9 +40,31 @@ class _LoginScreenState extends State<LoginScreen> {
       await prefs.setDouble('userBmi', bmi);
 
       if (mounted) {
-        Navigator.pushReplacementNamed(context, '/home');
+        Navigator.pushReplacementNamed(context, '/survey');
       }
     }
+  }
+
+  void _showTermsDialog() {
+    showAnimatedPopup(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF141414),
+        title: Text('Terms of Service', style: TextStyle(color: Theme.of(context).primaryColor)),
+        content: const SingleChildScrollView(
+          child: Text(
+            'Welcome to Fittig!\n\n1. Acceptance of Terms\nBy continuing, you agree to be bound by these Terms of Service.\n\n2. User Responsibilities\nYou must provide accurate information for BMI calculation and personalized plans. The fitness and meal advice provided are for informational purposes only.\n\n3. Privacy & Data\nYour profile data is stored locally. We use the Gemini API securely to generate meal plans. We do not sell your personal data.\n\n4. Limitation of Liability\nFittig is a fitness tracking utility and not a certified medical or healthcare app. Please consult a doctor before starting any serious fitness regimen.',
+            style: TextStyle(color: Colors.white70),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CLOSE', style: TextStyle(color: Colors.white54)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -236,43 +260,21 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 48),
 
                 Center(
-                  child: Column(
-                    children: [
-                      RichText(
-                        text: TextSpan(
-                          text: 'By continuing, you agree to our ',
-                          style: const TextStyle(
-                            color: Colors.white54,
-                            fontSize: 12,
-                          ),
-                          children: [
-                            TextSpan(
-                              text: 'Terms of Service.',
-                              style: TextStyle(color: primaryColor),
-                            ),
-                          ],
-                        ),
+                  child: RichText(
+                    text: TextSpan(
+                      text: 'By continuing, you agree to our ',
+                      style: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
                       ),
-                      const SizedBox(height: 16),
-                      RichText(
-                        text: TextSpan(
-                          text: 'Already have an account? ',
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                          ),
-                          children: [
-                            TextSpan(
-                              text: 'Log In',
-                              style: TextStyle(
-                                color: primaryColor,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
+                      children: [
+                        TextSpan(
+                          text: 'Terms of Service.',
+                          style: TextStyle(color: primaryColor),
+                          recognizer: TapGestureRecognizer()..onTap = _showTermsDialog,
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],

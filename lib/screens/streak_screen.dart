@@ -11,6 +11,7 @@ class StreakScreen extends StatefulWidget {
 
 class _StreakScreenState extends State<StreakScreen> {
   List<String> _streaks = [];
+  double _monthlyCalories = 0.0;
   bool _isLoading = true;
 
   @override
@@ -21,8 +22,13 @@ class _StreakScreenState extends State<StreakScreen> {
 
   Future<void> _loadStreaks() async {
     final prefs = await SharedPreferences.getInstance();
+    
+    final String currentMonth = DateTime.now().toIso8601String().substring(0, 7);
+    final String calKey = 'calories_$currentMonth';
+    
     setState(() {
       _streaks = prefs.getStringList('workoutStreaks') ?? [];
+      _monthlyCalories = prefs.getDouble(calKey) ?? 0.0;
       _isLoading = false;
     });
   }
@@ -53,8 +59,7 @@ class _StreakScreenState extends State<StreakScreen> {
                   horizontal: 24.0,
                   vertical: 16.0,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                child: ListView(
                   children: [
                     Container(
                       decoration: BoxDecoration(
@@ -96,6 +101,35 @@ class _StreakScreenState extends State<StreakScreen> {
                               color: Colors.white,
                             ),
                           ),
+                          const SizedBox(height: 32),
+                          const Text(
+                            'MONTHLY CALORIE BURN',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.white60,
+                              letterSpacing: 2.0,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _monthlyCalories.toStringAsFixed(0),
+                            style: TextStyle(
+                              fontSize: 60,
+                              fontWeight: FontWeight.w900,
+                              color: primaryColor,
+                              height: 1.0,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'KCAL',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: Colors.white,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -111,51 +145,51 @@ class _StreakScreenState extends State<StreakScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    Expanded(
-                      child: GridView.builder(
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 7,
-                              crossAxisSpacing: 12,
-                              mainAxisSpacing: 12,
-                            ),
-                        itemCount: 30, // Show last 30 days
-                        itemBuilder: (context, index) {
-                          final day = today.subtract(
-                            Duration(days: 29 - index),
-                          );
-                          final dayStr = day.toIso8601String().substring(0, 10);
-                          final isTrained = _streaks.contains(dayStr);
-                          final isToday = index == 29;
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 7,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                          ),
+                      itemCount: 30, // Show last 30 days
+                      itemBuilder: (context, index) {
+                        final day = today.subtract(
+                          Duration(days: 29 - index),
+                        );
+                        final dayStr = day.toIso8601String().substring(0, 10);
+                        final isTrained = _streaks.contains(dayStr);
+                        final isToday = index == 29;
 
-                          return Container(
-                            decoration: BoxDecoration(
-                              color: isTrained
-                                  ? primaryColor
-                                  : (isToday
-                                        ? Colors.white24
-                                        : const Color(0xFF141414)),
-                              shape: BoxShape.circle,
-                              border: isToday && !isTrained
-                                  ? Border.all(color: primaryColor, width: 2)
-                                  : null,
-                            ),
-                            child: Center(
-                              child: Text(
-                                '${day.day}',
-                                style: TextStyle(
-                                  color: isTrained
-                                      ? Colors.black
-                                      : Colors.white54,
-                                  fontWeight: isTrained || isToday
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                ),
+                        return Container(
+                          decoration: BoxDecoration(
+                            color: isTrained
+                                ? primaryColor
+                                : (isToday
+                                      ? Colors.white24
+                                      : const Color(0xFF141414)),
+                            shape: BoxShape.circle,
+                            border: isToday && !isTrained
+                                ? Border.all(color: primaryColor, width: 2)
+                                : null,
+                          ),
+                          child: Center(
+                            child: Text(
+                              '${day.day}',
+                              style: TextStyle(
+                                color: isTrained
+                                    ? Colors.black
+                                    : Colors.white54,
+                                fontWeight: isTrained || isToday
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
                               ),
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),

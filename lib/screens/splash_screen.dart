@@ -21,10 +21,15 @@ class _SplashScreenState extends State<SplashScreen> {
 
     final prefs = await SharedPreferences.getInstance();
     final hasUser = prefs.getString('userName') != null;
+    final surveyCompleted = prefs.getBool('surveyCompleted') ?? false;
 
     if (mounted) {
       if (hasUser) {
-        Navigator.pushReplacementNamed(context, '/home');
+        if (surveyCompleted) {
+          Navigator.pushReplacementNamed(context, '/home');
+        } else {
+          Navigator.pushReplacementNamed(context, '/survey');
+        }
       } else {
         Navigator.pushReplacementNamed(context, '/login');
       }

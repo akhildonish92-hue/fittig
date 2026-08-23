@@ -1,4 +1,4 @@
-package com.example.fittig
+package com.fittig.official
 
 import io.flutter.embedding.android.FlutterActivity
 
